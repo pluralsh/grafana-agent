@@ -11,6 +11,7 @@ import (
 	mimirClient "github.com/grafana/agent/pkg/mimir/client"
 	v1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	promListers "github.com/prometheus-operator/prometheus-operator/pkg/client/listers/monitoring/v1"
+	alertmanagerConfig "github.com/prometheus/alertmanager/config"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -81,6 +82,30 @@ func (m *fakeMimirClient) ListRules(ctx context.Context, namespace string) (map[
 		output[ns] = v
 	}
 	return output, nil
+}
+
+func (m *fakeMimirClient) CreateAlertmanagerConfig(ctx context.Context, cfg string, templates map[string]string) error {
+	// m.rulesMut.Lock()
+	// defer m.rulesMut.Unlock()
+	// m.deleteLocked(namespace, rule.Name)
+	// m.rules[namespace] = append(m.rules[namespace], rule)
+	return nil
+}
+
+func (m *fakeMimirClient) DeleteAlermanagerConfig(ctx context.Context) error {
+	// m.rulesMut.Lock()
+	// defer m.rulesMut.Unlock()
+	// m.deleteLocked(namespace, rule.Name)
+	// m.rules[namespace] = append(m.rules[namespace], rule)
+	return nil
+}
+
+func (m *fakeMimirClient) GetAlertmanagerConfig(ctx context.Context) (*alertmanagerConfig.Config, map[string]string, error) {
+	// m.rulesMut.Lock()
+	// defer m.rulesMut.Unlock()
+	// m.deleteLocked(namespace, rule.Name)
+	// m.rules[namespace] = append(m.rules[namespace], rule)
+	return nil, nil, nil
 }
 
 func TestEventLoop(t *testing.T) {

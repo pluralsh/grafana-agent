@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	log "github.com/go-kit/log"
+	alertmanagerConfig "github.com/prometheus/alertmanager/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/config"
 	"github.com/prometheus/prometheus/model/rulefmt"
@@ -42,6 +43,9 @@ type Interface interface {
 	CreateRuleGroup(ctx context.Context, namespace string, rg rulefmt.RuleGroup) error
 	DeleteRuleGroup(ctx context.Context, namespace, groupName string) error
 	ListRules(ctx context.Context, namespace string) (map[string][]rulefmt.RuleGroup, error)
+	CreateAlertmanagerConfig(ctx context.Context, cfg string, templates map[string]string) error
+	DeleteAlermanagerConfig(ctx context.Context) error
+	GetAlertmanagerConfig(ctx context.Context) (*alertmanagerConfig.Config, map[string]string, error)
 }
 
 // MimirClient is a client to the Mimir API.
