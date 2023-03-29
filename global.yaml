@@ -1,0 +1,150 @@
+global:
+  resolve_timeout: 5m
+route:
+  receiver: "null"
+  group_by:
+  - namespace
+  routes:
+  - receiver: bootstrap/console/console
+    matchers:
+    - namespace="bootstrap"
+    continue: true
+  - receiver: bootstrap/plural/plural
+    matchers:
+    - namespace="bootstrap"
+    continue: true
+  - receiver: console/console/console
+    matchers:
+    - namespace="console"
+    continue: true
+  - receiver: console/plural/plural
+    matchers:
+    - namespace="console"
+    continue: true
+  - receiver: grafana/console/console
+    matchers:
+    - namespace="grafana"
+    continue: true
+  - receiver: grafana/plural/plural
+    matchers:
+    - namespace="grafana"
+    continue: true
+  - receiver: ingress-nginx/console/console
+    matchers:
+    - namespace="ingress-nginx"
+    continue: true
+  - receiver: ingress-nginx/plural/plural
+    matchers:
+    - namespace="ingress-nginx"
+    continue: true
+  - receiver: mimir/console/console
+    matchers:
+    - namespace="mimir"
+    continue: true
+  - receiver: mimir/plural/plural
+    matchers:
+    - namespace="mimir"
+    continue: true
+  - receiver: monitoring/console/console
+    matchers:
+    - namespace="monitoring"
+    continue: true
+  - receiver: monitoring/plural/plural
+    matchers:
+    - namespace="monitoring"
+    continue: true
+  - receiver: postgres/console/console
+    matchers:
+    - namespace="postgres"
+    continue: true
+  - receiver: postgres/plural/plural
+    matchers:
+    - namespace="postgres"
+    continue: true
+  - receiver: "null"
+    matchers:
+    - alertname =~ "InfoInhibitor|Watchdog"
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+inhibit_rules:
+- target_matchers:
+  - severity =~ warning|info
+  source_matchers:
+  - severity = critical
+  equal:
+  - namespace
+  - alertname
+- target_matchers:
+  - severity = info
+  source_matchers:
+  - severity = warning
+  equal:
+  - namespace
+  - alertname
+- target_matchers:
+  - severity = info
+  source_matchers:
+  - alertname = InfoInhibitor
+  equal:
+  - namespace
+receivers:
+- name: "null"
+- name: bootstrap/console/console
+  webhook_configs:
+  - send_resolved: true
+    url: http://console.console:4000/alertmanager
+- name: bootstrap/plural/plural
+  webhook_configs:
+  - send_resolved: true
+    url: http://plural-operator.bootstrap:8080/webhook
+- name: console/console/console
+  webhook_configs:
+  - send_resolved: true
+    url: http://console.console:4000/alertmanager
+- name: console/plural/plural
+  webhook_configs:
+  - send_resolved: true
+    url: http://plural-operator.bootstrap:8080/webhook
+- name: grafana/console/console
+  webhook_configs:
+  - send_resolved: true
+    url: http://console.console:4000/alertmanager
+- name: grafana/plural/plural
+  webhook_configs:
+  - send_resolved: true
+    url: http://plural-operator.bootstrap:8080/webhook
+- name: ingress-nginx/console/console
+  webhook_configs:
+  - send_resolved: true
+    url: http://console.console:4000/alertmanager
+- name: ingress-nginx/plural/plural
+  webhook_configs:
+  - send_resolved: true
+    url: http://plural-operator.bootstrap:8080/webhook
+- name: mimir/console/console
+  webhook_configs:
+  - send_resolved: true
+    url: http://console.console:4000/alertmanager
+- name: mimir/plural/plural
+  webhook_configs:
+  - send_resolved: true
+    url: http://plural-operator.bootstrap:8080/webhook
+- name: monitoring/console/console
+  webhook_configs:
+  - send_resolved: true
+    url: http://console.console:4000/alertmanager
+- name: monitoring/plural/plural
+  webhook_configs:
+  - send_resolved: true
+    url: http://plural-operator.bootstrap:8080/webhook
+- name: postgres/console/console
+  webhook_configs:
+  - send_resolved: true
+    url: http://console.console:4000/alertmanager
+- name: postgres/plural/plural
+  webhook_configs:
+  - send_resolved: true
+    url: http://plural-operator.bootstrap:8080/webhook
+templates:
+- /etc/alertmanager/config/*.tmpl

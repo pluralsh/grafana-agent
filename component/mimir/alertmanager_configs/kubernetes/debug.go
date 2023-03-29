@@ -1,4 +1,4 @@
-package alertmanagers
+package alertmanager_configs
 
 import "fmt"
 

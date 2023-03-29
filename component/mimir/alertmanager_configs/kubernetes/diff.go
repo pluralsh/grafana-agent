@@ -1,10 +1,10 @@
-package alertmanagers
+package alertmanager_configs
 
 import (
 	"reflect"
 	"strings"
 
-	promv1beta1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1beta1"
+	promv1alpha1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1alpha1"
 	amConfig "github.com/prometheus/alertmanager/config"
 	"github.com/prometheus/alertmanager/pkg/labels"
 	// Used for prometheus rulefmt compatibility instead of gopkg.in/yaml.v2
@@ -22,11 +22,11 @@ const (
 
 type amConfigDiff struct {
 	Kind    amConfigDiffKind
-	Actual  promv1beta1.AlertmanagerConfig
-	Desired promv1beta1.AlertmanagerConfig
+	Actual  promv1alpha1.AlertmanagerConfig
+	Desired promv1alpha1.AlertmanagerConfig
 }
 
-type amConfigsByNamespace map[string]*promv1beta1.AlertmanagerConfig
+type amConfigsByNamespace map[string]*promv1alpha1.AlertmanagerConfig
 
 // type amConfigsByNamespace map[string][]amConfig.Config
 type amConfigDiffsByNamespace map[string][]amConfigDiff
@@ -38,13 +38,16 @@ type amConfigRouteDiff struct {
 }
 
 // function that will compare []*amConfig.Route and build the config that will be used to update the alertmanager
-func (c *Component) buildRoutes(desired, actual []*amConfig.Route) {
+func (c *Component) buildRoutes(desired, actual []*amConfig.Route) []*amConfig.Route {
 
 	var outputRoutes []*amConfig.Route
 
 	seenRoutes := map[string]bool{}
 	for _, desiredRoute := range desired {
 		seenRoutes[desiredRoute.Receiver] = true
+
+		// TODO: cleanup but test if the error is happening due to routes having empty default values
+		// desiredRoute.GroupInterval = c.currentState.Route.GroupInterval
 
 		for _, actualRoute := range actual {
 			if desiredRoute.Receiver == actualRoute.Receiver {
@@ -62,7 +65,7 @@ func (c *Component) buildRoutes(desired, actual []*amConfig.Route) {
 	// append routes that are unmanaged by the operator
 	outputRoutes = append(outputRoutes, c.unmanagedState.Route.Routes...)
 
-	c.wantedState.Route.Routes = outputRoutes
+	// c.wantedState.Route.Routes = outputRoutes
 
 	for _, actualRoute := range actual {
 		if seenRoutes[actualRoute.Receiver] {
@@ -71,10 +74,11 @@ func (c *Component) buildRoutes(desired, actual []*amConfig.Route) {
 		// route needs to be removed
 		// TODO: we'd only need this for logging and metric purposes
 	}
+	return outputRoutes
 }
 
 // function that will compare []*amConfig.Receiver and build the config that will be used to update the alertmanager
-func (c *Component) buildReceivers(desired, actual []*amConfig.Receiver) {
+func (c *Component) buildReceivers(desired, actual []*amConfig.Receiver) []*amConfig.Receiver {
 
 	var outputReceivers []*amConfig.Receiver
 
@@ -98,7 +102,7 @@ func (c *Component) buildReceivers(desired, actual []*amConfig.Receiver) {
 	// append receivers that are unmanaged by the operator
 	outputReceivers = append(outputReceivers, c.unmanagedState.Receivers...)
 
-	c.wantedState.Receivers = outputReceivers
+	// c.wantedState.Receivers = outputReceivers
 
 	for _, actualReceiver := range actual {
 		if seenReceivers[actualReceiver.Name] {
@@ -107,10 +111,11 @@ func (c *Component) buildReceivers(desired, actual []*amConfig.Receiver) {
 		// receiver needs to be removed
 		// TODO: we'd only need this for logging and metric purposes
 	}
+	return outputReceivers
 }
 
 // function that checks if two []amConfig.TimeInterval are equal or not and build the config that will be used to update the alertmanager
-func (c *Component) buildTimeIntervals(desired, actual []amConfig.TimeInterval) {
+func (c *Component) buildTimeIntervals(desired, actual []amConfig.TimeInterval) []amConfig.TimeInterval {
 
 	var outputTimeIntervals []amConfig.TimeInterval
 
@@ -134,7 +139,7 @@ func (c *Component) buildTimeIntervals(desired, actual []amConfig.TimeInterval) 
 	// append time intervals that are unmanaged by the operator
 	outputTimeIntervals = append(outputTimeIntervals, c.unmanagedState.TimeIntervals...)
 
-	c.wantedState.TimeIntervals = outputTimeIntervals
+	// c.wantedState.TimeIntervals = outputTimeIntervals
 
 	for _, actualTimeInterval := range actual {
 		if seenTimeIntervals[actualTimeInterval.Name] {
@@ -143,6 +148,7 @@ func (c *Component) buildTimeIntervals(desired, actual []amConfig.TimeInterval) 
 		// time interval needs to be removed
 		// TODO: we'd only need this for logging and metric purposes
 	}
+	return outputTimeIntervals
 }
 
 // function that checks if two amConfig.TimeInterval are equal or not
@@ -200,7 +206,7 @@ func equalRoutes(desired, actual *amConfig.Route) bool {
 // 	return diff
 // }
 
-// func diffAmConfigNamespaceState(desired []promv1beta1.AlertmanagerConfig, actual []promv1beta1.AlertmanagerConfig) []amConfigDiff {
+// func diffAmConfigNamespaceState(desired []promv1alpha1.AlertmanagerConfig, actual []promv1alpha1.AlertmanagerConfig) []amConfigDiff {
 // 	var diff []amConfigDiff
 
 // 	seenAmConfigs := map[string]bool{}
@@ -244,7 +250,7 @@ func equalRoutes(desired, actual *amConfig.Route) bool {
 // 	return diff
 // }
 
-// func equalAmConfigs(a, b promv1beta1.AlertmanagerConfig) bool {
+// func equalAmConfigs(a, b promv1alpha1.AlertmanagerConfig) bool {
 // 	aBuf, err := yaml.Marshal(a)
 // 	if err != nil {
 // 		return false

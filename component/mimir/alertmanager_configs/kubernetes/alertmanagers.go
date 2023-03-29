@@ -1,4 +1,4 @@
-package alertmanagers
+package alertmanager_configs
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/grafana/agent/component"
 	mimirClient "github.com/grafana/agent/pkg/mimir/client"
 	"github.com/pkg/errors"
-	promListers "github.com/prometheus-operator/prometheus-operator/pkg/client/listers/monitoring/v1beta1"
+	promListers "github.com/prometheus-operator/prometheus-operator/pkg/client/listers/monitoring/v1alpha1"
 	alertmanagerConfig "github.com/prometheus/alertmanager/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/weaveworks/common/instrument"
@@ -74,8 +74,8 @@ type Component struct {
 
 	// clusterState *alertmanagerConfig.Config
 
-	wantedState  *alertmanagerConfig.Config
-	updatedState *alertmanagerConfig.Config
+	// wantedState  *alertmanagerConfig.Config
+	updatedState alertmanagerConfig.Config
 
 	metrics   *metrics
 	healthMut sync.RWMutex
@@ -341,7 +341,7 @@ func (c *Component) startAlertmanagerConfigsInformer() {
 		}),
 	)
 
-	amConfigs := factory.Monitoring().V1beta1().AlertmanagerConfigs()
+	amConfigs := factory.Monitoring().V1alpha1().AlertmanagerConfigs()
 	c.amConfigLister = amConfigs.Lister()
 	c.amConfigInformer = amConfigs.Informer()
 	c.amConfigInformer.AddEventHandler(newQueuedEventHandler(c.log, c.queue))

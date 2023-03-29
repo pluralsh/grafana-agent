@@ -1,11 +1,16 @@
-package alertmanagers
+package alertmanager_configs
 
 import (
 	"fmt"
 	"time"
 
 	"github.com/grafana/agent/component/common/config"
+	amConfig "github.com/prometheus/alertmanager/config"
 )
+
+// redefine the alertmanager config type so that we can add methods to it
+type alertConfig amConfig.Config
+type alertGlobalConfig amConfig.GlobalConfig
 
 type Arguments struct {
 	Address              string                  `river:"address,attr"`

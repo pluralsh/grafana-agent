@@ -69,7 +69,7 @@ func (r *MimirClient) GetAlertmanagerConfig(ctx context.Context) (*alertmanagerC
 
 	conf, err := alertmanagerConfig.Load(compat.AlertmanagerConfig)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "unable to load alertmanager config")
+		return nil, nil, errors.Wrap(err, "unable to load alertmanager config") //TODO: ensure this works since it will break if no route exists
 	}
 
 	return conf, compat.TemplateFiles, nil

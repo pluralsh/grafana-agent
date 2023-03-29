@@ -1,4 +1,4 @@
-package alertmanagers
+package alertmanager_configs
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/pkg/errors"
-	promv1beta1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1beta1"
+	promv1alpha1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1alpha1"
 	amConfig "github.com/prometheus/alertmanager/config"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -135,8 +135,32 @@ func (c *Component) processEvent(ctx context.Context, e event) error {
 func (c *Component) syncMimir(ctx context.Context) error {
 	config, _, err := c.mimirClient.GetAlertmanagerConfig(ctx)
 	if err != nil {
-		level.Error(c.log).Log("msg", "failed to list rules from mimir", "err", err)
+		level.Error(c.log).Log("msg", "failed to get alertmanager config from mimir", "err", err)
 		return err
+	}
+
+	level.Info(c.log).Log("msg", "got current alertmanager config", "config", config)
+
+	c.currentState = config
+
+	level.Info(c.log).Log("msg", "config in currentState", "config", c.currentState)
+
+	if c.currentState.Route.Receiver == "" {
+		c.currentState.Route.Receiver = "null"
+		c.currentState.Receivers = append(c.currentState.Receivers, &amConfig.Receiver{Name: "null"})
+	}
+
+	c.managedState = &amConfig.Config{
+		Route:             &amConfig.Route{},
+		Receivers:         []*amConfig.Receiver{},
+		TimeIntervals:     []amConfig.TimeInterval{},
+		MuteTimeIntervals: []amConfig.MuteTimeInterval{},
+	}
+	c.unmanagedState = &amConfig.Config{
+		Route:             &amConfig.Route{},
+		Receivers:         []*amConfig.Receiver{},
+		TimeIntervals:     []amConfig.TimeInterval{},
+		MuteTimeIntervals: []amConfig.MuteTimeInterval{},
 	}
 
 	var unmanagedRoutes []*amConfig.Route
@@ -149,6 +173,9 @@ func (c *Component) syncMimir(ctx context.Context) error {
 			managedRoutes = append(managedRoutes, r)
 		}
 	}
+
+	// level.Info(c.log).Log("msg", "processed routes", "managed", managedRoutes)
+	// level.Info(c.log).Log("msg", "processed routes", "unmanaged", unmanagedRoutes)
 
 	// TODO: is this needed for inhibit rules?
 	// TODO: we might actually need to dedupe here since we have no way of identifying which inhibit rule is managed by an agent
@@ -175,26 +202,29 @@ func (c *Component) syncMimir(ctx context.Context) error {
 		}
 	}
 
-	var unmanagedTimeInterval []amConfig.TimeInterval
-	var managedTimeInterval []amConfig.TimeInterval
+	// level.Info(c.log).Log("msg", "processed receivers", "managed", managedReceivers)
+	// level.Info(c.log).Log("msg", "processed receivers", "unmanaged", unmanagedReceivers)
 
-	for _, timeInterval := range config.TimeIntervals {
-		if !isManagedByMimir(c.args.MimirNameSpacePrefix, timeInterval.Name) {
-			unmanagedTimeInterval = append(unmanagedTimeInterval, timeInterval)
+	var unmanagedMuteTimeInterval []amConfig.MuteTimeInterval
+	var managedMuteTimeInterval []amConfig.MuteTimeInterval
+
+	for _, muteTimeInterval := range config.MuteTimeIntervals {
+		if !isManagedByMimir(c.args.MimirNameSpacePrefix, muteTimeInterval.Name) {
+			unmanagedMuteTimeInterval = append(unmanagedMuteTimeInterval, muteTimeInterval)
 		} else {
-			managedTimeInterval = append(managedTimeInterval, timeInterval)
+			managedMuteTimeInterval = append(managedMuteTimeInterval, muteTimeInterval)
 		}
 	}
 
 	c.managedState.Route.Routes = managedRoutes
 	// c.managedState.InhibitRules = managedInhibitRules
 	c.managedState.Receivers = managedReceivers
-	c.managedState.TimeIntervals = managedTimeInterval
+	c.managedState.MuteTimeIntervals = managedMuteTimeInterval
 
 	c.unmanagedState.Route.Routes = unmanagedRoutes
 	// c.unmanagedState.InhibitRules = unmanagedInhibitRules
 	c.unmanagedState.Receivers = unmanagedReceivers
-	c.unmanagedState.TimeIntervals = unmanagedTimeInterval
+	c.unmanagedState.MuteTimeIntervals = unmanagedMuteTimeInterval
 
 	return nil
 }
@@ -207,23 +237,74 @@ func (c *Component) reconcileState(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// c.wantedState = &amConfig.Config{
+	// 	Route:             &amConfig.Route{},
+	// 	Receivers:         []*amConfig.Receiver{},
+	// 	TimeIntervals:     []amConfig.TimeInterval{},
+	// 	MuteTimeIntervals: []amConfig.MuteTimeInterval{},
+	// }
 	desiredState, err := c.convertAlertmanagerConfigs(clusterState)
 	if err != nil {
 		return err
 	}
 
-	c.buildRoutes(desiredState.Route.Routes, c.managedState.Route.Routes)
-	c.buildReceivers(desiredState.Receivers, c.managedState.Receivers)
-	c.buildTimeIntervals(desiredState.TimeIntervals, c.managedState.TimeIntervals)
+	level.Info(c.log).Log("msg", "converted alertmanagerconfigs", "desiredState", desiredState)
 
-	c.updatedState = c.currentState
+	routes := c.buildRoutes(desiredState.Route.Routes, c.managedState.Route.Routes)
+	receivers := c.buildReceivers(desiredState.Receivers, c.managedState.Receivers)
+	// timeIntervals := c.buildTimeIntervals(desiredState.TimeIntervals, c.managedState.TimeIntervals) //TODO: reenable
 
-	c.updatedState.Route.Routes = c.wantedState.Route.Routes
-	c.updatedState.Receivers = c.wantedState.Receivers
-	c.updatedState.TimeIntervals = c.wantedState.TimeIntervals
+	// level.Info(c.log).Log("msg", "built routes", "routers", routes)
+	// level.Info(c.log).Log("msg", "built receivers", "receivers", receivers)
+	// level.Info(c.log).Log("msg", "built time intervals", "time intervals", timeIntervals)
 
-	return c.applyChanges(ctx, *c.unmanagedState, nil)
+	c.updatedState = *c.currentState
+
+	level.Info(c.log).Log("msg", "state to be applied copied from current", "updatedState", c.updatedState)
+
+	c.updatedState.Route.Routes = make([]*amConfig.Route, len(routes))
+	for _, route := range routes {
+		c.updatedState.Route.Routes = append(c.updatedState.Route.Routes, route)
+	}
+
+	c.updatedState.Receivers = make([]*amConfig.Receiver, len(receivers))
+	for _, receiver := range receivers {
+		c.updatedState.Receivers = append(c.updatedState.Receivers, receiver)
+	}
+
+	//TODO: reenable
+	// c.updatedState.TimeIntervals = make([]amConfig.TimeInterval, len(timeIntervals))
+	// for _, timeInterval := range timeIntervals {
+	// 	c.updatedState.TimeIntervals = append(c.updatedState.TimeIntervals, timeInterval)
+	// }
+
+	// copy(c.updatedState.Route.Routes, routes)
+	// copy(c.updatedState.Receivers, receivers)
+	// copy(c.updatedState.TimeIntervals, timeIntervals)
+
+	level.Info(c.log).Log("msg", "state to be applied after adding built changes", "updatedState", c.updatedState)
+
+	return c.applyChanges(ctx, c.updatedState, nil)
 }
+
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
+//TODO: check why there are receivers with empty name names in the config that is being pushed, this might be from adding the unmanaged configs
 
 func defaultAlertmanagerConfiguration() []byte {
 	return []byte(`route:
@@ -238,7 +319,7 @@ func (c *Component) loadStateFromK8s() (amConfigsByNamespace, error) {
 		return nil, fmt.Errorf("failed to list namespaces: %w", err)
 	}
 
-	res := make(map[string]*promv1beta1.AlertmanagerConfig)
+	res := make(map[string]*promv1alpha1.AlertmanagerConfig)
 
 	// desiredState := make(amConfigsByNamespace)
 	for _, ns := range matchedNamespaces {
@@ -265,7 +346,7 @@ func (c *Component) loadStateFromK8s() (amConfigsByNamespace, error) {
 	return res, nil
 }
 
-func (c *Component) convertAlertmanagerConfigs(amConfigs map[string]*promv1beta1.AlertmanagerConfig) (*amConfig.Config, error) {
+func (c *Component) convertAlertmanagerConfigs(amConfigs map[string]*promv1alpha1.AlertmanagerConfig) (*amConfig.Config, error) {
 	amConfigIdentifiers := make([]string, len(amConfigs))
 	i := 0
 	for k := range amConfigs {
@@ -274,7 +355,12 @@ func (c *Component) convertAlertmanagerConfigs(amConfigs map[string]*promv1beta1
 	}
 	sort.Strings(amConfigIdentifiers)
 
-	output := &amConfig.Config{}
+	output := &amConfig.Config{
+		Route:             &amConfig.Route{},
+		Receivers:         []*amConfig.Receiver{},
+		TimeIntervals:     []amConfig.TimeInterval{},
+		MuteTimeIntervals: []amConfig.MuteTimeInterval{},
+	}
 
 	subRoutes := make([]*amConfig.Route, 0, len(amConfigs))
 	for _, amConfigIdentifier := range amConfigIdentifiers {
@@ -310,12 +396,12 @@ func (c *Component) convertAlertmanagerConfigs(amConfigs map[string]*promv1beta1
 			output.Receivers = append(output.Receivers, receivers)
 		}
 
-		for _, timeInterval := range amConfigs[amConfigIdentifier].Spec.TimeIntervals {
-			mti, err := convertTimeInterval(&timeInterval, crKey, c.args.MimirNameSpacePrefix)
+		for _, muteTimeInterval := range amConfigs[amConfigIdentifier].Spec.MuteTimeIntervals {
+			mti, err := convertMuteTimeInterval(&muteTimeInterval, crKey, c.args.MimirNameSpacePrefix)
 			if err != nil {
 				return nil, errors.Wrapf(err, "AlertmanagerConfig %s", crKey.String())
 			}
-			output.TimeIntervals = append(output.TimeIntervals, *mti)
+			output.MuteTimeIntervals = append(output.MuteTimeIntervals, *mti)
 		}
 	}
 
@@ -336,7 +422,7 @@ func keyFunc(obj interface{}) (string, bool) {
 	return k, true
 }
 
-func convertCRDAmConfigToAmConfig(crd promv1beta1.AlertmanagerConfigSpec) (*amConfig.Config, error) {
+func convertCRDAmConfigToAmConfig(crd promv1alpha1.AlertmanagerConfigSpec) (*amConfig.Config, error) {
 	buf, err := yaml.Marshal(crd)
 	if err != nil {
 		return nil, err
